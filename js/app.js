@@ -16,8 +16,20 @@
     developability: "Developability",
     cgt: "Cell & gene therapy",
     peptide: "Peptide analytics",
-    "disease-models": "Complex disease models"
+    "disease-models": "Complex disease models",
+    invivo: "In vivo pharmacology & tox",
+    production: "Production & scale-up"
   };
+
+  const V = '?v=20261119b';
+  // Optional layers from other files; guard for missing ones.
+  if (typeof window.applyStages === 'function') { try { window.applyStages(ASSAYS); } catch (e) { console.warn('applyStages failed', e); } }
+  if (typeof window.applyValidation === 'function' && ASSAYS.some((a) => !a.validation)) { try { window.applyValidation(ASSAYS); } catch (e) { console.warn('applyValidation failed', e); } }
+  const STAGES = window.STAGES || {};
+  const SPECIES = window.SPECIES || {};
+  const ROUTES = window.ROUTES || {};
+  const stageLabel = (k) => (STAGES[k] && STAGES[k].label) || k;
+  const listOf = (a, f) => (Array.isArray(a[f]) ? a[f] : []);
 
   const main = document.getElementById('main');
   const topbarMeta = document.getElementById('topbar-meta');
@@ -28,6 +40,9 @@
   let activeFilter = 'all';
   let activeCat = 'all';
   let activeTier = 'all';
+  let activeStage = 'all';
+  let activeSpecies = 'all';
+  let activeRoute = 'all';
   let query = '';
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,6 +56,21 @@
     if (bench) { try { bench.dispose(); } catch (e) { /* ignore */ } bench = null; }
   }
   const providerNames = () => new Set(ASSAYS.flatMap((a) => a.providers || []).map((p) => p.name));
+
+  const prefer = (keys, active) => (active && active !== 'all' && keys.includes(active))
+    ? [active, ...keys.filter((k) => k !== active)]
+    : keys;
+  const metaChips = (a, max) => {
+    const out = [];
+    const st = prefer(listOf(a, 'stages'), activeStage);
+    if (st.length) out.push(`<span class="meta-chip meta-stage" title="Development stage">${esc(st.slice(0, max).map(stageLabel).join(' / '))}${st.length > max ? ' +' + (st.length - max) : ''}</span>`);
+    const sp = prefer(listOf(a, 'species'), activeSpecies);
+    if (sp.length) out.push(`<span class="meta-chip meta-species" title="Species">${esc(sp.slice(0, max).map((k) => SPECIES[k] || k).join(', '))}${sp.length > max ? ' +' + (sp.length - max) : ''}</span>`);
+    const rt = prefer(listOf(a, 'routes'), activeRoute);
+    if (rt.length) out.push(`<span class="meta-chip meta-route" title="Delivery routes">${esc(rt.slice(0, max).map((k) => k.toUpperCase().length <= 3 ? k.toUpperCase() : (ROUTES[k] || k)).join(', '))}${rt.length > max ? ' +' + (rt.length - max) : ''}</span>`);
+    return out.length ? `<div class="meta-chips">${out.join('')}</div>` : '';
+  };
+  const europePmcUrl = (a) => 'https://europepmc.org/search?query=' + encodeURIComponent(`"${a.name}" AND (reproducibility OR validation)`);
 
   // ---------- Views ----------
   function renderHome() {
@@ -66,6 +96,9 @@
         <div class="filters" id="filters" role="group" aria-label="Filter by drug type"></div>
         <div class="filters" id="cat-filters" role="group" aria-label="Filter by category"></div>
         <div class="filters" id="tier-filters" role="group" aria-label="Filter by validation evidence tier"></div>
+        <div class="filters" id="stage-filters" role="group" aria-label="Filter by drug development stage" hidden></div>
+        <div class="filters filters-invivo" id="species-filters" role="group" aria-label="Filter in vivo assays by species" hidden></div>
+        <div class="filters filters-invivo" id="route-filters" role="group" aria-label="Filter in vivo assays by delivery route" hidden></div>
         <div class="grid" id="grid"></div>
       </section>`;
 
@@ -77,11 +110,14 @@
       b.type = 'button';
       b.className = 'chip';
       b.textContent = label;
-      const cur = group === 'cat' ? activeCat : group === 'tier' ? activeTier : activeFilter;
+      const cur = { cat: activeCat, tier: activeTier, stage: activeStage, species: activeSpecies, route: activeRoute }[group] ?? activeFilter;
       b.setAttribute('aria-pressed', String(cur === key));
       b.addEventListener('click', () => {
         if (group === 'cat') { activeCat = key; }
         else if (group === 'tier') { activeTier = key; }
+        else if (group === 'stage') { activeStage = key; }
+        else if (group === 'species') { activeSpecies = key; }
+        else if (group === 'route') { activeRoute = key; }
         else { activeFilter = key; }
         renderHome();
       });
@@ -108,6 +144,31 @@
       tierFilters.appendChild(b);
     });
 
+    // development-stage filters (needs js/stages.js)
+    const stageKeys = Object.keys(STAGES).filter((k) => ASSAYS.some((a) => listOf(a, 'stages').includes(k)));
+    if (stageKeys.length) {
+      const row = document.getElementById('stage-filters');
+      row.hidden = false;
+      row.appendChild(mk('All stages', 'all', 'stage'));
+      stageKeys.forEach((k) => {
+        const b = mk(stageLabel(k), k, 'stage');
+        if (STAGES[k].desc) b.title = STAGES[k].desc;
+        row.appendChild(b);
+      });
+    }
+
+    // species + route filters, only when in vivo assays carry them
+    const vocabRow = (id, field, vocab, allLabel, group) => {
+      const keys = Object.keys(vocab).filter((k) => ASSAYS.some((a) => listOf(a, field).includes(k)));
+      if (!keys.length) return;
+      const row = document.getElementById(id);
+      row.hidden = false;
+      row.appendChild(mk(allLabel, 'all', group));
+      keys.forEach((k) => row.appendChild(mk(vocab[k], k, group)));
+    };
+    vocabRow('species-filters', 'species', SPECIES, 'Any species (in vivo)', 'species');
+    vocabRow('route-filters', 'routes', ROUTES, 'Any route (in vivo)', 'route');
+
     // search
     const search = document.getElementById('search');
     search.addEventListener('input', () => { query = search.value; renderGrid(); });
@@ -116,7 +177,7 @@
 
     // 3D book
     const stage = document.getElementById('book-stage');
-    import('./book3d.js').then((m) => {
+    import('./book3d.js' + V).then((m) => {
       if (book3d) book3d.dispose();
       book3d = m.initBook3d(stage, ASSAYS, (id) => { location.hash = `#/assay/${id}`; });
       if (pendingChapter) { book3d.setOpen(true); book3d.setChapter(pendingChapter); pendingChapter = null; }
@@ -132,6 +193,9 @@
       if (activeFilter !== 'all' && !a.drugTypes.includes(activeFilter)) return false;
       if (activeCat !== 'all' && a.category !== activeCat) return false;
       if (activeTier !== 'all' && tierOf(a) !== activeTier) return false;
+      if (activeStage !== 'all' && !listOf(a, 'stages').includes(activeStage)) return false;
+      if (activeSpecies !== 'all' && !listOf(a, 'species').includes(activeSpecies)) return false;
+      if (activeRoute !== 'all' && !listOf(a, 'routes').includes(activeRoute)) return false;
       if (!q) return true;
       const t = tierOf(a);
       const tierText = t && TIERS[t] ? `tier ${t} ${TIERS[t].label} ${TIERS[t].name}` : '';
@@ -139,7 +203,10 @@
         a.name, a.tagline,
         ...(a.tests || []), ...(a.providers || []).map((p) => p.name),
         ...(a.instruments || []).map((i) => i.name + ' ' + i.vendor),
-        CATEGORIES[a.category] || '', tierText
+        CATEGORIES[a.category] || '', tierText,
+        ...listOf(a, 'stages').map(stageLabel),
+        ...listOf(a, 'species').map((k) => SPECIES[k] || k),
+        ...listOf(a, 'routes').map((k) => ROUTES[k] || k)
       ].join(' ').toLowerCase();
       return hay.includes(q);
     });
@@ -173,7 +240,8 @@
             <span class="card-no">${String(ASSAYS.indexOf(a) + 1).padStart(2, '0')}</span>
           </div>
           <p class="tagline">${esc(a.tagline)}</p>
-          <div class="types">${tierTag(a)}${a.drugTypes.map((d) => `<span class="type-tag">${esc(DRUG_TYPES[d] || d)}</span>`).join('')}</div>`;
+          <div class="types">${tierTag(a)}${a.drugTypes.map((d) => `<span class="type-tag">${esc(DRUG_TYPES[d] || d)}</span>`).join('')}</div>
+          ${metaChips(a, 2)}`;
         grid.appendChild(el);
       });
     }
@@ -216,6 +284,13 @@
           ${tierTag(a)}
           ${a.drugTypes.map((d) => `<span class="type-tag">${esc(DRUG_TYPES[d] || d)}</span>`).join('')}
         </div>
+
+        <dl class="assay-meta">
+          ${listOf(a, 'stages').length ? `<div><dt>Development stage</dt><dd>${listOf(a, 'stages').map((k) => `<span class="meta-chip meta-stage"${STAGES[k] && STAGES[k].desc ? ` title="${esc(STAGES[k].desc)}"` : ''}>${esc(stageLabel(k))}</span>`).join('')}</dd></div>` : ''}
+          ${listOf(a, 'species').length ? `<div><dt>Species</dt><dd>${listOf(a, 'species').map((k) => `<span class="meta-chip meta-species">${esc(SPECIES[k] || k)}</span>`).join('')}</dd></div>` : ''}
+          ${listOf(a, 'routes').length ? `<div><dt>Delivery routes</dt><dd>${listOf(a, 'routes').map((k) => `<span class="meta-chip meta-route">${esc(ROUTES[k] || k)}</span>`).join('')}</dd></div>` : ''}
+          <div><dt>Open literature</dt><dd><a class="lit-link" href="${esc(europePmcUrl(a))}" target="_blank" rel="noopener noreferrer">Search Europe PMC for reproducibility and validation studies</a></dd></div>
+        </dl>
 
         <div class="section bench-section">
           <h2><span class="no">${sec.bench}</span> The bench, live</h2>
@@ -288,7 +363,7 @@
     const mount = document.getElementById('bench-mount');
     const protocolList = main.querySelector('ol.protocol');
     const token = benchToken;
-    import('./lab3d.js').then((m) => {
+    import('./lab3d.js' + V).then((m) => {
       if (token !== benchToken || !mount.isConnected) return;
       bench = m.mountBench(mount, a, { protocolList });
     }).catch((err) => {
@@ -298,10 +373,40 @@
     });
   }
 
+  function renderModelGaps() {
+    main.innerHTML = `
+      <article class="assay model-gaps-page">
+        <p class="crumb"><a href="#/">Catalog</a> / AI model gaps</p>
+        <div id="model-gaps-root"></div>
+      </article>`;
+    const root = document.getElementById('model-gaps-root');
+    if (typeof window.renderModelGaps === 'function') {
+      try {
+        window.renderModelGaps(root, { assayLink: (id) => '#/assay/' + id });
+      } catch (e) {
+        console.warn('renderModelGaps failed', e);
+        root.innerHTML = '<p class="no-results">The AI model gaps map could not be drawn. Please reload the page.</p>';
+      }
+    } else {
+      root.innerHTML = '<h1>AI model gaps</h1><p class="no-results">The AI model gaps map is not available yet.</p>';
+    }
+    window.scrollTo({ top: 0 });
+  }
+
+  function setNav(h) {
+    document.querySelectorAll('.topnav a').forEach((el) => {
+      const href = el.getAttribute('href');
+      const on = href === '#/model-gaps' ? h === '#/model-gaps' : h !== '#/model-gaps';
+      if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
+    });
+  }
+
   // ---------- Router ----------
   function route() {
     disposeBench();
     const h = location.hash;
+    setNav(h);
+    if (h === '#/model-gaps') { renderModelGaps(); return; }
     const m = h.match(/^#\/assay\/([\w-]+)$/);
     if (m) renderAssay(m[1]);
     else renderHome();

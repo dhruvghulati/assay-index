@@ -30,7 +30,26 @@
     q6b: { label: 'ICH Q6B Specifications for biotechnological products', url: 'https://database.ich.org/sites/default/files/Q6B_Guideline.pdf' },
     cgt: { label: 'FDA Potency assurance for cellular and gene therapy products', url: 'https://www.fda.gov/regulatory-information/search-fda-guidance-documents/guidance-industry-potency-assurance-cellular-and-gene-therapy-products' },
     jain: { label: 'Biophysical properties of clinical-stage antibodies (Jain 2017, PNAS)', url: 'https://www.pnas.org/doi/full/10.1073/pnas.1616408114' },
-    ht246: { label: 'High-throughput developability profiling of 246 IgGs', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12674332/' }
+    ht246: { label: 'High-throughput developability profiling of 246 IgGs', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12674332/' },
+    // Round 2 (verified open access, Nov 2026)
+    s7a: { label: 'ICH S7A Safety pharmacology studies', url: 'https://database.ich.org/sites/default/files/S7A_Guideline.pdf' },
+    s7b: { label: 'ICH S7B Non-clinical evaluation of delayed ventricular repolarization (QT)', url: 'https://database.ich.org/sites/default/files/S7B_Guideline.pdf' },
+    m3: { label: 'ICH M3(R2) Nonclinical safety studies for clinical trials', url: 'https://database.ich.org/sites/default/files/M3_R2__Guideline.pdf' },
+    s6: { label: 'ICH S6(R1) Preclinical safety of biotechnology-derived pharmaceuticals', url: 'https://database.ich.org/sites/default/files/S6_R1_Guideline_0.pdf' },
+    s3a: { label: 'ICH S3A Toxicokinetics', url: 'https://database.ich.org/sites/default/files/S3A_Guideline.pdf' },
+    s9: { label: 'ICH S9 Nonclinical evaluation for anticancer pharmaceuticals', url: 'https://database.ich.org/sites/default/files/S9_Guideline.pdf' },
+    s12: { label: 'ICH S12 Nonclinical biodistribution for gene therapy products (2023)', url: 'https://database.ich.org/sites/default/files/ICH_S12_Step4_Guideline_2023_0314.pdf' },
+    tg474: { label: 'OECD Test No. 474: Mammalian erythrocyte micronucleus test', url: 'https://www.oecd.org/en/publications/test-no-474-mammalian-erythrocyte-micronucleus-test_9789264264762-en.html' },
+    tg489: { label: 'OECD Test No. 489: In vivo mammalian alkaline comet assay', url: 'https://www.oecd.org/en/publications/test-no-489-in-vivo-mammalian-alkaline-comet-assay_9789264264885-en.html' },
+    q11: { label: 'ICH Q11 Development and manufacture of drug substances', url: 'https://database.ich.org/sites/default/files/Q11%20Guideline.pdf' },
+    q7: { label: 'ICH Q7 GMP for active pharmaceutical ingredients', url: 'https://database.ich.org/sites/default/files/Q7%20Guideline.pdf' },
+    q5a: { label: 'ICH Q5A(R2) Viral safety of biotechnology products (2023)', url: 'https://database.ich.org/sites/default/files/ICH_Q5A%28R2%29_Guideline_2023_1101.pdf' },
+    q5b: { label: 'ICH Q5B Analysis of the expression construct', url: 'https://database.ich.org/sites/default/files/Q5B%20Guideline.pdf' },
+    q5d: { label: 'ICH Q5D Cell substrates for biotechnological products', url: 'https://database.ich.org/sites/default/files/Q5D%20Guideline.pdf' },
+    q5e: { label: 'ICH Q5E Comparability after manufacturing process changes', url: 'https://database.ich.org/sites/default/files/Q5E%20Guideline.pdf' },
+    mrd: { label: 'FDA Hematologic malignancies: use of MRD in drug development (2020)', url: 'https://www.fda.gov/regulatory-information/search-fda-guidance-documents/hematologic-malignancies-regulatory-considerations-use-minimal-residual-disease-development-drug-and' },
+    ctdna: { label: 'FDA Use of ctDNA for early-stage solid tumor drug development (2024)', url: 'https://www.fda.gov/media/183874/download' },
+    giab: { label: 'Genome in a Bottle benchmark variant calls (Zook 2019)', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC6500473/' }
   };
 
   // Rule shorthand: [tier, basis, refKeys, extraAsks]
@@ -68,6 +87,20 @@
     emerging: 'Emerging assay type with limited cross-site data. Treat results as exploratory unless the provider supplies a validation package.',
     str: 'Cell-line authentication by STR follows a published consensus standard (ANSI/ATCC); karyotype and SNP-array QC are lab-specific.',
     lbaBio: 'Biomarker ligand-binding assay; ICH M10 excludes biomarkers, so fit-for-purpose validation is set by each lab.',
+    tk: 'Exposure in toxicology species is defined by ICH S3A and M3(R2); the bioanalysis behind it is validated under ICH M10.',
+    glptox: 'ICH M3(R2) sets duration, species and dose selection for repeat-dose toxicology; ICH S6(R1) covers biologics and S9 anticancer drugs. Studies run under GLP.',
+    telemetry: 'ICH S7A requires a core cardiovascular safety study and ICH S7B the in vivo QT assessment; conscious telemetry in non-rodents is the standard design.',
+    s12: 'ICH S12 (2023) sets the design of nonclinical biodistribution studies for gene therapies (species, tissues, timepoints, assay sensitivity). Shedding is outside its scope.',
+    invivoGenotox: 'OECD TG 474 (micronucleus) and TG 489 (comet) fix the in vivo protocols, and ICH S2(R1) places them in the standard genotoxicity battery.',
+    efficacy: 'In vivo efficacy model with no validation guideline; ICH S9 frames how anticancer pharmacology supports development, but model performance is lab and model specific.',
+    invivoC: 'In vivo model widely published but set up lab by lab; ICH M3(R2) frames when such studies are needed, not how the model is validated.',
+    giab: 'Genome in a Bottle reference genomes give a shared truth set to benchmark sequencing and variant-calling accuracy across labs.',
+    ctdna: 'FDA ctDNA guidance (2024) discusses assay standardisation, analytical validation and pre-analytics for ctDNA used in drug development; there are no shared acceptance criteria yet.',
+    mrd: 'FDA MRD guidance (2020) sets expectations for MRD assays used in haematologic-malignancy trials (sensitivity, sample type, analytical validation); FDA-cleared tests exist for this assay type.',
+    hla: 'High-resolution HLA typing labs are accredited against published histocompatibility standards (ASHI, EFI) with external proficiency testing.',
+    prodBio: 'Production service, not an assay. For recombinant products made under GMP, ICH Q5B and Q5D cover the expression construct and cell substrate, Q5A(R2) viral safety for animal cell lines, Q11 process development and Q7 GMP; Q5E applies when scale or process changes.',
+    prodChem: 'Production service, not an assay. Synthetic peptides and oligonucleotides are chemical drug substances: under GMP, ICH Q11 covers process development and Q7 manufacture.',
+    prodResearch: 'Production service, not an assay. Research-grade material has no GMP framework; quality rests on the provider certificate of analysis and your own identity and purity checks. The linked ICH guidelines apply once material moves to GMP.',
     comet: 'ICH S2(R1) accepts the in vivo comet assay as a follow-up test; the in vitro format has no guideline and is lab-specific.'
   };
 
@@ -77,7 +110,6 @@
     // Bioanalysis
     lcms: rule('A', 'm10', ['m10'], ['Full ICH M10 validation report for the matrix and species', 'Incurred sample reanalysis (ISR) results']),
     'oligo-lcms': rule('A', 'm10', ['m10'], ['Full ICH M10 validation report for the matrix and species', 'Metabolite / n-1 shortmer selectivity data']),
-    'pdx-bioanalysis': rule('A', 'm10', ['m10'], ['ICH M10 validation status (full, partial or cross-validation)', 'Stability data covering your sample handling']),
     elisa: rule('A', 'm10', ['m10'], ['ICH M10 ligand-binding validation report', 'Selectivity in individual matrix lots, dilutional linearity, hook effect']),
     'hybridization-elisa': rule('A', 'm10', ['m10'], ['ICH M10 ligand-binding validation report', 'Cross-reactivity with metabolites']),
     luminex: rule('C', 'lbaBio', ['m10', 'agm'], ['Fit-for-purpose validation per analyte', 'Parallelism with endogenous samples']),
@@ -168,6 +200,31 @@
     'spatial-tx': rule('D', 'emerging', []),
     'longread-vector': rule('D', 'emerging', []),
     'integration-site': rule('C', 'genoC', []),
+    // In vivo (data-10)
+    'pdx-bioanalysis': rule('A', 'tk', ['m10', 's3a', 'm3'], ['ICH M10 validation status (full, partial or cross-validation)', 'Stability data covering your sample handling']),
+    'nhp-pk': rule('A', 'tk', ['s3a', 'm3', 'm10'], ['Bioanalytical method validation (ICH M10) for the species', 'Animal welfare accreditation (AAALAC or equivalent)']),
+    'glp-tox': rule('A', 'glptox', ['m3', 's6', 's9', 's3a'], ['GLP compliance statement and QA audit', 'Historical control data for the species and strain', 'Toxicokinetic bioanalysis validation (ICH M10)']),
+    'telemetry-cv': rule('A', 'telemetry', ['s7a', 's7b', 'e14'], ['Sensitivity data with a positive control (smallest detectable QTc change)', 'GLP status']),
+    'cgt-biodistribution': rule('A', 's12', ['s12'], ['qPCR/ddPCR sensitivity in each tissue matrix (copies per ug DNA)', 'Tissue list and timepoints vs ICH S12']),
+    'invivo-genotox': rule('A', 'invivoGenotox', ['tg474', 'tg489', 's2'], ['Historical negative and positive control data', 'Evidence of target-tissue exposure']),
+    'cns-delivery': rule('C', 'invivoC', ['m3'], ['Injection accuracy data (dye or imaging)', 'CSF sampling and bioanalysis validation']),
+    'ocular-invivo': rule('C', 'invivoC', ['m3'], ['Injection technique validation and ocular exam scoring scheme']),
+    'inhalation-invivo': rule('C', 'invivoC', ['m3'], ['Aerosol characterisation (MMAD, GSD) and delivered-dose estimate']),
+    'cdx-xenograft': rule('C', 'efficacy', ['s9'], ['Growth-curve reproducibility and take rate', 'Standard-of-care benchmark arm data']),
+    'pdx-efficacy': rule('C', 'efficacy', ['s9'], ['Model genomic characterisation and passage number', 'Take rate and standard-of-care response data']),
+    syngeneic: rule('C', 'efficacy', ['s9'], ['Checkpoint-inhibitor benchmark response for the model']),
+    'humanised-mice': rule('D', 'emerging', [], ['Human chimerism levels per donor and batch', 'Donor-to-donor variability and GvHD onset']),
+    'zebrafish-invivo': rule('D', 'emerging', [], ['Concordance with mammalian results for reference compounds']),
+    'inflammation-models': rule('C', 'invivoC', ['m3'], ['Disease incidence and scoring reproducibility', 'Reference treatment benchmark (e.g. dexamethasone, anti-TNF)']),
+    // Genomics (data-11)
+    wgs: rule('B', 'giab', ['giab'], ['Precision and recall on GIAB reference samples', 'Coverage depth and uniformity']),
+    'wes-panel': rule('B', 'giab', ['giab'], ['Precision and recall on GIAB reference samples in target regions', 'Fraction of targets at 20x or above']),
+    'liquid-biopsy-ctdna': rule('B', 'ctdna', ['ctdna'], ['Limit of detection by variant allele fraction with contrived standards', 'Pre-analytical requirements (tube, time to plasma)']),
+    'mrd-ctdna': rule('B', 'ctdna', ['ctdna'], ['Analytical sensitivity (LoD) and specificity in healthy-donor plasma', 'Turnaround for tumour-informed panel design']),
+    'mrd-ngs-clonoseq': rule('A', 'mrd', ['mrd'], ['Sensitivity threshold achieved (e.g. 1 in 10^5 or 10^6 cells)', 'Regulatory status of the test (cleared, LDT or research use)']),
+    'mrd-flow': rule('A', 'mrd', ['mrd', 'flow'], ['Sensitivity (cells acquired, LoD) and panel standardisation', 'Regulatory status of the test (cleared, LDT or research use)']),
+    'cfdna-methylation': rule('D', 'emerging', ['ctdna']),
+    'hla-typing': rule('B', 'hla', [], ['Accreditation (ASHI or EFI) and proficiency testing results', 'Resolution reported (fields) and ambiguity handling']),
     'liver-mps': rule('B', 'chip', ['chip'], ['Which platform and cell source; benchmark drug set and sensitivity/specificity'])
   };
 
@@ -184,8 +241,29 @@
     ionchannel: rule('C', 'agm', ['agm', 'e14']),
     developability: rule('C', 'devC', ['jain']),
     cgt: rule('C', 'cgtQ2', ['q2', 'cgt']),
-    'disease-models': rule('D', 'emerging', [])
+    'disease-models': rule('D', 'emerging', []),
+    invivo: rule('C', 'invivoC', ['m3']),
+    production: rule('C', 'prodResearch', ['q11'])
   };
+
+  // Production & scale-up (data-12): a manufacturing service, tiered by the framework that governs it.
+  var PROD_ASK = [
+    'Certificate of analysis contents (identity, purity, endotoxin, concentration)',
+    'Scale-up track record and batch success rate at your target scale',
+    'GMP status and inspection history, if clinical material is needed'
+  ];
+  function productionRule(a) {
+    var t = [a.id, a.name, a.tagline, a.scale, a.automation].join(' ');
+    var gmp = /\bc?GMP\b/i.test(t);
+    var tier = gmp ? 'A' : 'C';
+    if (/peptide|oligo|SPPS|phosphoramidite|nucleotide|siRNA|ASO/i.test(t) && !/express|ferment|recombinant/i.test(t)) {
+      return rule(tier, gmp ? 'prodChem' : 'prodResearch', ['q11', 'q7'], PROD_ASK);
+    }
+    var refs = ['q5b', 'q5d', 'q11', 'q7', 'q5e'];
+    if (/CHO|HEK|mammalian|insect|baculo|AAV|lenti|vector|cell line/i.test(t)) refs = ['q5a', 'q5b', 'q5d', 'q11', 'q7', 'q5e'];
+    if (/cell-free/i.test(t)) refs = ['q11', 'q7'];
+    return rule(tier, gmp ? 'prodBio' : 'prodResearch', refs, PROD_ASK.concat(['Expression construct and cell bank documentation (ICH Q5B, Q5D)']));
+  }
 
   var ASK_BY_TIER = {
     A: ['Validation report against the named guideline', 'GLP or GMP status of the facility for this assay', 'Recent run acceptance (QC pass rate)'],
@@ -201,6 +279,18 @@
 
   function pickRule(a) {
     if (BY_ID[a.id]) return BY_ID[a.id];
+    if (a.category === 'production') return productionRule(a);
+    if (a.category === 'invivo') {
+      if (textHas(a, /genotox|micronucleus|comet/i)) return BY_ID['invivo-genotox'];
+      if (textHas(a, /telemetry|safety pharmacology|cardiovascular/i)) return BY_ID['telemetry-cv'];
+      if (textHas(a, /biodistribution/i)) return BY_ID['cgt-biodistribution'];
+      if (textHas(a, /GLP|toxicolog/i)) return BY_ID['glp-tox'];
+      if (textHas(a, /\bPK\b|TK|pharmacokinetic/i)) return BY_ID['nhp-pk'];
+      if (textHas(a, /xenograft|tumou?r|PDX|syngeneic|oncolog/i)) return BY_ID['cdx-xenograft'];
+      return BY_CAT.invivo;
+    }
+    if (textHas(a, /\bMRD\b|residual disease/i)) return textHas(a, /ctDNA|plasma/i) ? BY_ID['mrd-ctdna'] : BY_ID['mrd-ngs-clonoseq'];
+    if (textHas(a, /ctDNA|liquid biopsy/i)) return BY_ID['liquid-biopsy-ctdna'];
     // keyword fallbacks for new chapters
     if (a.category === 'disease-models') {
       if (textHas(a, /liver|hepat/i) && textHas(a, /chip|mps|microphysiolog/i)) return BY_ID['liver-mps'];

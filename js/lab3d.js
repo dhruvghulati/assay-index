@@ -30,7 +30,8 @@ const PHASE_DUR = { dispense: 5.2, incubate: 3.8, run: 4.2, read: 4.8, analyse: 
 export const ARCHETYPES = {
   plate: 'Plate reader', biosensor: 'Biosensor', lcms: 'LC-MS', flow: 'Flow cytometer',
   culture: 'Cell culture and imaging', sequencing: 'Sequencing', ephys: 'Electrophysiology',
-  thermal: 'Thermal and biophysics', micro: 'Microbiology'
+  thermal: 'Thermal and biophysics', micro: 'Microbiology',
+  vivarium: 'In vivo', bioreactor: 'Production'
 };
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,8 @@ export function archetypeOf(a) {
   const name = [a.id, a.name].join(' ').toLowerCase();
   const first = (a.instruments && a.instruments[0] ? a.instruments[0].name : '').toLowerCase();
   const full = (name + ' ' + inst + ' ' + a.category).toLowerCase();
+  if (a.category === 'invivo') return 'vivarium';
+  if (a.category === 'production') return 'bioreactor';
   for (const txt of [name, first, full]) for (const [k, re] of ARCH_RULES) if (re.test(txt)) return k;
   if (a.category === 'cell' || a.category === 'disease-models') return 'culture';
   if (a.category === 'genomics') return 'sequencing';
@@ -74,6 +77,9 @@ export function phaseOf(step, i, n) {
   if (/^(culture|maintain|grow)\b.*\b(passag|stabl|expressing)/.test(s)) return 'dispense';
   // decision rules ("Two-fold rule: positive if ...") are analysis even when they mention dose
   if (/^[^:]{0,40}\b(rule|criteri|threshold)\b|\b(positive|negative) if\b/.test(s)) return 'analyse';
+  // in vivo: acclimatisation is a hold; blood sampling / necropsy is the collection run
+  if (/^(acclimat|habituat|quarantin)/.test(s)) return 'incubate';
+  if (/\b(serial (blood|bleed|sampl)|blood (sampl|draw|collect)|bleed|microsampl|tail[- ]vein sampl|terminal (bleed|collect)|necrops)/.test(s) && !/^(fit|analy|report|calculat)|^[a-z ]{0,20}histopath/.test(s)) return 'run';
   // a step that leads with qPCR is the read-out; one that leads with sequencing is an instrument run
   const lead = s.replace(/^[^:]{0,30}:\s*/, '');
   if (/^(rt-)?qpcr\b/.test(lead)) return 'read';
@@ -410,6 +416,57 @@ function hexLerp(a, b, t) {
 
 // readout drawers: (ctx, L, T, R, B, p data progress, f fit overlay, r rng-values)
 const READOUTS = {
+  vivarium(x, L, T, R, B, p, f, S) {
+    // plasma concentration-time profile (semi-log), three animals per timepoint
+    axes(x, L, T, R, B, 'time post-dose (h)', 'plasma conc (log)');
+    const tp = [0.083, 0.25, 0.5, 1, 2, 4, 8, 12, 24], ka = S.pk.ka, ke = S.pk.ke;
+    const conc = (h) => (Math.exp(-ke * h) - Math.exp(-ka * h)) / (Math.exp(-ke * S.pk.tmax) - Math.exp(-ka * S.pk.tmax));
+    const yOf = (c) => B - (B - T) * clamp((Math.log10(Math.max(c, 0.004)) + 2.4) / 2.5);
+    const xOf = (h) => L + (R - L) * (h / 24);
+    x.fillStyle = CSS.faint; x.font = `500 12px ${FONT}`;
+    x.textAlign = 'center';
+    for (const h of [0, 6, 12]) x.fillText(String(h), xOf(h), B + 16);
+    x.textAlign = 'left';
+    const shown = Math.floor(p * tp.length + 0.001);
+    const cols = [CSS.sage, CSS.sageDeep, CSS.amber];
+    tp.forEach((h, i) => {
+      if (i >= shown) return;
+      for (let k = 0; k < 3; k++) {
+        const c = conc(h) * (0.82 + 0.36 * S.noise[(i * 3 + k) % S.noise.length]);
+        x.fillStyle = cols[k]; x.beginPath(); x.arc(xOf(h) + (k - 1) * 4, yOf(c), 4, 0, Math.PI * 2); x.fill();
+      }
+    });
+    if (f > 0) {
+      x.strokeStyle = CSS.rust; x.lineWidth = 2.4; x.beginPath();
+      const n = Math.floor(120 * f);
+      for (let k = 0; k <= n; k++) { const h = 0.05 + 23.95 * k / 120; const px = xOf(h), py = yOf(conc(h)); k ? x.lineTo(px, py) : x.moveTo(px, py); }
+      x.stroke();
+      if (f > 0.6) tag(x, 't1/2 ' + (Math.LN2 / ke).toFixed(1) + ' h   AUC ' + Math.round(S.num(400, 4200)) + ' ng.h/mL', R - 300, T + 14, CSS.rust);
+    }
+  },
+  bioreactor(x, L, T, R, B, p, f, S) {
+    // fed-batch growth (OD600) with product titer climbing after induction
+    axes(x, L, T, R, B, 'process time (h)', 'OD600 / titer');
+    const ind = S.bio.ind, n = Math.floor(160 * p);
+    const od = (u) => 0.04 + 0.9 / (1 + Math.exp(-(u - S.bio.mid) * 11));
+    const ti = (u) => u < ind ? 0 : 0.78 * (1 - Math.exp(-(u - ind) * 4.2));
+    x.setLineDash([4, 5]); x.strokeStyle = CSS.faint; x.lineWidth = 1;
+    if (p > ind) { const ix = L + (R - L) * ind; x.beginPath(); x.moveTo(ix, T); x.lineTo(ix, B); x.stroke(); x.fillStyle = CSS.faint; x.font = `500 12px ${FONT}`; x.fillText('induce', ix + 4, T + 12); }
+    x.setLineDash([]);
+    for (const [fn, col, w] of [[od, CSS.sage, 2.6], [ti, CSS.amber, 2.6]]) {
+      x.strokeStyle = col; x.lineWidth = w; x.beginPath();
+      for (let k = 0; k <= n; k++) { const u = k / 160; const px = L + (R - L) * u, py = B - (B - T) * (fn(u) + (S.noise[k % S.noise.length] - 0.5) * 0.012); k ? x.lineTo(px, py) : x.moveTo(px, py); }
+      x.stroke();
+    }
+    x.font = `500 12px ${FONT}`;
+    x.fillStyle = CSS.sage; x.fillRect(L + 10, T + 6, 10, 3); x.fillText('OD600', L + 26, T + 11);
+    x.fillStyle = CSS.amber; x.fillRect(L + 84, T + 6, 10, 3); x.fillText('titer', L + 100, T + 11);
+    if (f > 0) {
+      const bw = (R - L) * 0.05, bx0 = R - bw * 6.5;
+      [0.25, 0.7, 1, 0.55, 0.18].forEach((v, i) => { const h = (B - T) * 0.35 * v * f; x.fillStyle = i === 2 ? CSS.rust : CSS.sageTint; x.fillRect(bx0 + i * bw * 1.25, B - h, bw, h); });
+      if (f > 0.5) tag(x, 'Titer ' + S.num(0.6, 4.8).toFixed(1) + ' g/L   purity ' + Math.round(S.num(92, 99)) + '%', R - 290, T + 34, CSS.rust);
+    }
+  },
   plate(x, L, T, R, B, p, f, S) {
     const gw = (R - L) * 0.58, cs = Math.min(gw / 12, (B - T) / 8);
     const shown = Math.floor(p * 96 + 0.001);
@@ -622,6 +679,8 @@ function readoutSeed(id) {
   S.q = []; for (let i = 0; i < 50; i++) S.q.push(clamp(0.9 - i * 0.006 - r() * 0.12 - (i > 44 ? 0.2 : 0)));
   S.noise = []; for (let i = 0; i < 97; i++) S.noise.push(r());
   S.tms = []; const nt = 2 + Math.floor(r() * 2); for (let i = 0; i < nt; i++) S.tms.push(0.35 + i * 0.16 + r() * 0.06);
+  S.pk = { ka: 2 + r() * 3, ke: 0.12 + r() * 0.2 }; S.pk.tmax = Math.log(S.pk.ka / S.pk.ke) / (S.pk.ka - S.pk.ke);
+  S.bio = { mid: 0.32 + r() * 0.1, ind: 0.42 + r() * 0.08 };
   S.counts = [0.14]; for (let i = 1; i < 7; i++) S.counts.push(clamp(0.14 + (r() < 0.5 ? i * 0.12 : r() * 0.08)));
   return S;
 }
@@ -1008,7 +1067,230 @@ function instMicro(K, a, seed) {
   };
 }
 
-const INSTRUMENTS = { plate: instPlateReader, biosensor: instBiosensor, lcms: instLCMS, flow: instFlow, culture: instCulture, sequencing: instSequencing, ephys: instEphys, thermal: instThermal, micro: instMicro };
+// In vivo: IVC cage rack, dosing syringe, blood microtubes, then an LC-MS/MS readout
+function makeCage(K) {
+  const c = new THREE.Group();
+  c.add(rb(K, 0.5, 0.05, 0.7, PAL.sageTint, 0, 0, 0, 0.03, { rough: 0.5 }));
+  c.add(bx(K, 0.46, 0.22, 0.66, 0xeef2ee, 0, 0.03, 0, { glass: true, opacity: 0.32 }));
+  c.add(bx(K, 0.44, 0.035, 0.64, 0xe2cf9f, 0, 0.04, 0, { rough: 0.95 })); // bedding
+  c.add(rb(K, 0.52, 0.05, 0.72, PAL.slate, 0, 0.25, 0, 0.03, { rough: 0.4 })); // filter lid
+  c.add(cyl(K, 0.045, 0.045, 0.2, 0xe7eeee, 0.12, 0.3, -0.22, { transparent: true, opacity: 0.6, rough: 0.2 }, 14)); // water bottle
+  c.add(bx(K, 0.16, 0.1, 0.01, PAL.paper2, -0.1, 0.1, 0.355)); // cage card
+  c.add(bx(K, 0.12, 0.012, 0.012, PAL.inkFaint, -0.1, 0.17, 0.362));
+  return c;
+}
+function makeFish(K) {
+  const m = new THREE.Group();
+  const body = mesh(new THREE.SphereGeometry(0.02, 12, 8), K.mat(PAL.amber, { rough: 0.4 }), 0, 0.09, 0, false); body.scale.set(0.7, 0.8, 2.6); m.add(body);
+  const fin = mesh(new THREE.ConeGeometry(0.018, 0.03, 8), K.mat(PAL.amber, { rough: 0.4 }), 0, 0.09, -0.065, false); fin.rotation.x = -Math.PI / 2; m.add(fin);
+  for (const z of [-0.02, 0.01]) m.add(mesh(new THREE.BoxGeometry(0.029, 0.006, 0.012), K.mat(PAL.slate), 0, 0.09, z, false));
+  return m;
+}
+function makeMouse(K) {
+  const m = new THREE.Group();
+  const bodyM = K.mat(0xf3eee4, { rough: 0.8 });
+  const body = mesh(new THREE.SphereGeometry(0.06, 16, 12), bodyM, 0, 0.055, 0); body.scale.set(1, 0.75, 1.55); m.add(body);
+  const head = mesh(new THREE.SphereGeometry(0.035, 14, 10), bodyM, 0, 0.065, 0.1); head.scale.set(1, 0.9, 1.3); m.add(head);
+  for (const sx of [-0.022, 0.022]) m.add(mesh(new THREE.SphereGeometry(0.014, 10, 8), K.mat(0xe7b9b0, { rough: 0.6 }), sx, 0.098, 0.085));
+  for (const sx of [-0.016, 0.016]) m.add(mesh(new THREE.SphereGeometry(0.006, 8, 6), K.mat(PAL.ink), sx, 0.075, 0.13, false));
+  const tail = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.04, -0.09), new THREE.Vector3(0.03, 0.025, -0.15), new THREE.Vector3(-0.02, 0.02, -0.21), new THREE.Vector3(0.02, 0.02, -0.26)]);
+  m.add(mesh(new THREE.TubeGeometry(tail, 16, 0.006, 5), K.mat(0xe7b9b0, { rough: 0.6 }), 0, 0, 0, false));
+  return m;
+}
+function makeSyringe(K) {
+  // origin at the needle tip, barrel pointing up
+  const s = new THREE.Group();
+  s.add(cyl(K, 0.003, 0.003, 0.14, PAL.inkFaint, 0, 0, 0, { metal: 0.8, rough: 0.2 }, 6));
+  s.add(cyl(K, 0.012, 0.02, 0.03, PAL.amber, 0, 0.14, 0, {}, 12));
+  s.add(cyl(K, 0.032, 0.032, 0.34, 0xeef2ee, 0, 0.17, 0, { glass: true, opacity: 0.45 }, 18));
+  const liqM = K.own(PAL.amber, { rough: 0.3, transparent: true, opacity: 0.85 });
+  const liq = mesh(new THREE.CylinderGeometry(0.027, 0.027, 1, 16), liqM, 0, 0, 0, false);
+  liq.geometry.translate(0, 0.5, 0); liq.position.y = 0.175; s.add(liq);
+  const plunger = new THREE.Group(); s.add(plunger);
+  plunger.add(cyl(K, 0.008, 0.008, 0.36, PAL.paper2, 0, 0, 0, {}, 8));
+  plunger.add(cyl(K, 0.045, 0.045, 0.015, PAL.paper2, 0, 0.36, 0, {}, 18));
+  plunger.add(cyl(K, 0.03, 0.03, 0.02, PAL.ink, 0, -0.01, 0, {}, 16));
+  s.add(cyl(K, 0.055, 0.055, 0.014, PAL.paper2, 0, 0.5, 0, {}, 18));
+  return { group: s, plunger, liq, top: 0.175, len: 0.31 };
+}
+function instVivarium(K, a, seed) {
+  const g = new THREE.Group();
+  // stainless IVC rack, 2 columns x 3 shelves
+  const RX = -0.72, cols = [-0.29, 0.29], rows = [0.08, 0.5, 0.92];
+  const steel = { metal: 0.6, rough: 0.35 };
+  for (const sx of [-0.6, 0.6]) for (const sz of [-0.38, 0.38]) g.add(bx(K, 0.04, 1.36, 0.04, PAL.inkFaint, RX + sx, 0, -0.35 + sz, steel));
+  for (const y of rows) g.add(bx(K, 1.24, 0.025, 0.8, PAL.inkFaint, RX, y - 0.03, -0.35, steel));
+  g.add(bx(K, 1.24, 0.1, 0.12, PAL.sageDeep, RX, 1.32, -0.7)); // air plenum
+  const cages = [];
+  for (const y of rows) for (const cx of cols) {
+    const c = makeCage(K); c.position.set(RX + cx, y, -0.35); g.add(c); cages.push(c);
+  }
+  const sp = (a.species || []).map(String);
+  const fishOnly = sp.length > 0 && sp.every((k) => k === 'zebrafish');
+  const critter = fishOnly ? makeFish : makeMouse;
+  if (fishOnly) cages.forEach((c) => { c.children[2].material = K.mat(0xbcd3d6, { transparent: true, opacity: 0.7, rough: 0.1 }); c.children[2].scale.y = 5; c.children[2].position.y = 0.1275; });
+  const active = cages[1]; // bottom row, right column slides out
+  const activeLid = active.children[3], activeLidZ = activeLid.position.z;
+  const mouse = critter(K); mouse.scale.setScalar(1.35); mouse.position.set(-0.08, 0.075, 0.04); mouse.rotation.y = 0.5; active.add(mouse);
+  const sib = critter(K); sib.scale.setScalar(1.35); sib.position.set(0.1, 0.075, -0.15); sib.rotation.y = -2.2; active.add(sib);
+  for (const ci of [3, 4]) { const mm = critter(K); mm.position.set(0, 0.075, -0.05); mm.rotation.y = ci * 1.3; cages[ci].add(mm); }
+  const syr = makeSyringe(K); syr.group.position.set(RX + 0.6, 0.72, 0.5); syr.group.rotation.z = 0.5; g.add(syr.group);
+  const synPark = new THREE.Vector3(RX + 0.75, 0.0, 0.55);
+  // blood microtube rack (K2EDTA, lavender caps) on the bench
+  const rack = new THREE.Group(); rack.position.set(RX - 0.05, 0, 0.62); g.add(rack);
+  rack.add(rb(K, 0.9, 0.1, 0.22, PAL.paper2, 0, 0, 0, 0.03));
+  const tubes = [];
+  for (let i = 0; i < 8; i++) {
+    const tx = -0.36 + i * 0.103;
+    rack.add(cyl(K, 0.028, 0.022, 0.2, 0xeef2ee, tx, 0.06, 0, { glass: true, opacity: 0.5 }, 12));
+    rack.add(cyl(K, 0.033, 0.033, 0.045, 0x9a86b5, tx, 0.26, 0, { rough: 0.5 }, 12));
+    const bm = K.own(0x8e1f1a, { rough: 0.35 });
+    const b = mesh(new THREE.CylinderGeometry(0.024, 0.02, 1, 12), bm, tx, 0.065, 0, false);
+    b.geometry.translate(0, 0.5, 0); b.scale.y = 0.001; b.visible = false; rack.add(b); tubes.push(b);
+  }
+  // compact LC-MS/MS for plasma bioanalysis
+  const MX = 0.62;
+  g.add(rb(K, 0.95, 0.92, 1.15, PAL.paper2, MX, 0, -0.25, 0.08, { rough: 0.45 }));
+  g.add(rb(K, 0.97, 0.18, 1.17, PAL.sageDeep, MX, 0, -0.25, 0.05));
+  g.add(bx(K, 0.7, 0.05, 0.02, PAL.amber, MX, 0.78, 0.33));
+  for (let i = 0; i < 5; i++) g.add(bx(K, 0.02, 0.24, 0.02, PAL.rule, MX - 0.2 + i * 0.1, 0.42, 0.33));
+  const tray = makeTray(K, 0.72, 0.5); tray.position.set(MX, 0.94, -0.2); g.add(tray);
+  const coneM = K.own(PAL.rust, { metal: 0.5, rough: 0.35, emissive: PAL.amber, ei: 0 });
+  const cone = mesh(new THREE.ConeGeometry(0.06, 0.16, 18), coneM, MX - 0.52, 0.55, 0.15); cone.rotation.z = Math.PI / 2; g.add(cone);
+  const l = led(K, MX + 0.36, 0.86, 0.34); g.add(l);
+  const mPos = mouse.position.clone();
+  return {
+    group: g, focus: new THREE.Vector3(-0.2, 0.55, 0.25), plateScale: 0.55,
+    dock: () => new THREE.Vector3(tray.position.x, tray.position.y + 0.06, tray.position.z),
+    animate(s) {
+      const ph = s.phase, p = s.p;
+      // the cage slides out to dose (dispense) and to bleed (run)
+      const out = (ph === 'dispense' || ph === 'run') ? Math.min(ease(seg(p, 0, 0.15)), 1 - ease(seg(p, 0.88, 1))) : 0;
+      active.position.z = -0.35 + out * 0.55;
+      mouse.position.x = mPos.x + Math.sin(s.t * 1.7) * 0.03;
+      mouse.rotation.y = 0.5 + Math.sin(s.t * 1.1) * 0.5;
+      sib.rotation.y = -2.2 + Math.sin(s.t * 0.7 + 1) * 0.3;
+      // dosing syringe: travel to the cage, push the plunger, return
+      activeLid.position.z = activeLidZ - out * 0.45;
+      const above = new THREE.Vector3(RX + 0.29 + mPos.x, rows[0] + 0.5, active.position.z + mPos.z + 0.06);
+      let pos = synPark.clone().add(new THREE.Vector3(0, 0.72, -0.05)), tilt = 0.5, push = 0;
+      if (ph === 'dispense') {
+        const go = ease(seg(p, 0.15, 0.3)), back = ease(seg(p, 0.8, 0.92));
+        const dip = Math.sin(Math.PI * seg(p, 0.3, 0.8)) * 0.3;
+        pos.lerp(above, go * (1 - back)); pos.y -= dip * (1 - back);
+        tilt = 0.5 * (1 - go * (1 - back));
+        push = seg(p, 0.4, 0.7);
+      } else push = (s.lastDispIndex ?? -1) >= 0 ? 1 : 0;
+      syr.group.position.copy(pos); syr.group.rotation.z = tilt;
+      syr.plunger.position.y = syr.top + 0.02 + syr.len * (1 - push);
+      syr.liq.scale.y = Math.max(0.001, syr.len * (1 - push)); syr.liq.visible = push < 0.99;
+      // serial bleeds fill the tubes left to right during run; full afterwards
+      const fill = ph === 'run' ? seg(p, 0.15, 0.88) * 8 : (ph === 'read' || ph === 'analyse' || s.hasRead) ? 8 : 0;
+      tubes.forEach((b, i) => { const f = clamp(fill - i); b.visible = f > 0.01; b.scale.y = Math.max(0.001, f * 0.12); });
+      coneM.emissiveIntensity = ph === 'read' ? 0.5 + 0.5 * Math.sin(s.t * 14) : 0;
+      setLed(l, ph === 'read' ? PAL.amber : PAL.sage, ph === 'read' || ph === 'run' ? 0.9 : 0.25);
+    }
+  };
+}
+
+// Production: stirred-tank fermenter with feed lines, OD/titer controller, and a purification column
+function instBioreactor(K, a, seed) {
+  const g = new THREE.Group();
+  const VX = -0.62, VZ = -0.25, R = 0.3, VH = 0.95, VY = 0.38;
+  // controller base with OD / titer display
+  g.add(rb(K, 0.95, VY, 0.85, PAL.paper2, VX, 0, VZ, 0.06, { rough: 0.45 }));
+  g.add(rb(K, 0.97, 0.06, 0.87, PAL.sage, VX, 0, VZ, 0.04));
+  const lcdM = K.own(0x1d2a1f, { emissive: PAL.sageTint, ei: 0.35 });
+  g.add(mesh(new THREE.BoxGeometry(0.34, 0.14, 0.02), lcdM, VX - 0.18, 0.2, VZ + 0.43));
+  const l = led(K, VX + 0.3, 0.2, VZ + 0.44); g.add(l);
+  for (let i = 0; i < 3; i++) g.add(cyl(K, 0.03, 0.03, 0.03, PAL.ink, VX + 0.05 + i * 0.08, 0.17, VZ + 0.43, {}, 12).rotateX(Math.PI / 2));
+  // glass vessel, jacket rings, broth
+  g.add(mesh(new THREE.CylinderGeometry(R, R, VH, 40, 1, true), K.mat(0xe9f0ee, { glass: true, opacity: 0.3 }), VX, VY + VH / 2, VZ, false));
+  for (const y of [VY + 0.04, VY + VH - 0.04]) g.add(mesh(new THREE.TorusGeometry(R + 0.005, 0.02, 8, 40).rotateX(Math.PI / 2), K.mat(PAL.inkFaint, { metal: 0.6, rough: 0.3 }), VX, y, VZ));
+  const brothM = K.own(0xe8d9a6, { rough: 0.3, transparent: true, opacity: 0.88 });
+  const broth = mesh(new THREE.CylinderGeometry(R - 0.02, R - 0.02, 1, 36), brothM, VX, VY + 0.01, VZ, false);
+  broth.geometry.translate(0, 0.5, 0); g.add(broth);
+  // headplate, motor, shaft and Rushton impellers
+  g.add(cyl(K, R + 0.04, R + 0.04, 0.05, PAL.inkFaint, VX, VY + VH, VZ, { metal: 0.65, rough: 0.3 }, 40));
+  g.add(cyl(K, 0.11, 0.11, 0.26, PAL.ink, VX, VY + VH + 0.05, VZ, { rough: 0.4 }, 24));
+  g.add(cyl(K, 0.12, 0.12, 0.03, PAL.sageDeep, VX, VY + VH + 0.31, VZ, {}, 24));
+  const shaft = new THREE.Group(); shaft.position.set(VX, 0, VZ); g.add(shaft);
+  shaft.add(cyl(K, 0.012, 0.012, VH - 0.08, PAL.inkFaint, 0, VY + 0.08, 0, { metal: 0.8, rough: 0.2 }, 8));
+  for (const y of [VY + 0.22, VY + 0.55]) {
+    shaft.add(cyl(K, 0.08, 0.08, 0.008, PAL.inkFaint, 0, y, 0, { metal: 0.8, rough: 0.2 }, 18));
+    for (let b = 0; b < 6; b++) { const bl = bx(K, 0.05, 0.05, 0.006, PAL.inkFaint, 0, y - 0.02, 0, { metal: 0.8, rough: 0.2 }); const an = b / 6 * Math.PI * 2; bl.position.x = Math.cos(an) * 0.095; bl.position.z = Math.sin(an) * 0.095; bl.rotation.y = -an; shaft.add(bl); }
+  }
+  // headplate ports + probes
+  for (const [px, pz, h] of [[0.17, 0.08, 0.6], [-0.15, 0.12, 0.5], [0.05, -0.18, 0.7]]) g.add(cyl(K, 0.014, 0.014, h, PAL.ink, VX + px, VY + VH + 0.05 - h + 0.12, VZ + pz, {}, 8));
+  // sparger bubbles
+  const bubM = K.mat(0xffffff, { transparent: true, opacity: 0.55, rough: 0.1 });
+  const bubGeo = new THREE.SphereGeometry(0.014, 8, 6);
+  const r = rng(seed);
+  const bubbles = [];
+  for (let i = 0; i < 26; i++) { const b = mesh(bubGeo, bubM, 0, 0, 0, false); b.userData = { a: r() * Math.PI * 2, rad: 0.04 + r() * 0.2, o: r(), sp: 0.5 + r() * 0.6 }; g.add(b); bubbles.push(b); }
+  // feed and base bottles with a peristaltic pump and lines to the headplate
+  const BX = VX - 0.62;
+  const feeds = [PAL.amber, 0xe7eeee, PAL.sageTint];
+  feeds.forEach((c, i) => {
+    const bz = VZ - 0.25 + i * 0.25;
+    g.add(cyl(K, 0.075, 0.075, 0.3, c, BX, 0, bz, { transparent: true, opacity: 0.7, rough: 0.2 }, 16));
+    g.add(cyl(K, 0.04, 0.04, 0.05, PAL.ink, BX, 0.3, bz, {}, 12));
+    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(BX, 0.35, bz), new THREE.Vector3(BX + 0.02, 0.7 + i * 0.05, bz), new THREE.Vector3(VX - 0.25, VY + VH + 0.25 + i * 0.03, VZ - 0.1 + i * 0.08), new THREE.Vector3(VX - 0.18 + i * 0.05, VY + VH + 0.05, VZ - 0.08 + i * 0.08)]);
+    g.add(mesh(new THREE.TubeGeometry(curve, 28, 0.01, 6), K.mat(i === 0 ? PAL.amber : PAL.rule, { rough: 0.3 }), 0, 0, 0, false));
+  });
+  const pump = new THREE.Group(); pump.position.set(BX + 0.05, 0.42, VZ + 0.32); g.add(pump);
+  pump.add(rb(K, 0.24, 0.2, 0.18, PAL.sageDeep, 0, 0, 0, 0.03));
+  const rotor = new THREE.Group(); rotor.position.set(0, 0.11, 0.095); pump.add(rotor);
+  rotor.add(mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.02, 20).rotateX(Math.PI / 2), K.mat(PAL.paper2), 0, 0, 0));
+  for (let i = 0; i < 3; i++) { const an = i / 3 * Math.PI * 2; rotor.add(mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.03, 10).rotateX(Math.PI / 2), K.mat(PAL.inkMuted, { metal: 0.5 }), Math.cos(an) * 0.04, Math.sin(an) * 0.04, 0.01)); }
+  // purification: chromatography system with a column and fraction tray dock
+  const CX = 0.68;
+  g.add(rb(K, 1.0, 0.62, 1.05, PAL.paper2, CX, 0, -0.25, 0.08, { rough: 0.45 }));
+  g.add(rb(K, 1.02, 0.1, 1.07, PAL.sageDeep, CX, 0.52, -0.25, 0.05));
+  g.add(bx(K, 0.82, 0.18, 0.02, PAL.ink, CX, 0.08, 0.28));
+  const tray = makeTray(K, 0.75, 0.55); tray.position.set(CX, 0.13, -0.2); g.add(tray);
+  const colX = CX - 0.18, colZ = 0.05, colY = 0.62, colH = 0.78;
+  g.add(rb(K, 0.06, colH + 0.12, 0.06, PAL.inkMuted, CX + 0.08, colY, colZ - 0.06, 0.02, { metal: 0.5 }));
+  g.add(mesh(new THREE.CylinderGeometry(0.065, 0.065, colH, 24, 1, true), K.mat(0xe9f0ee, { glass: true, opacity: 0.4 }), colX, colY + colH / 2, colZ, false));
+  g.add(cyl(K, 0.055, 0.055, colH * 0.8, 0xf1ead8, colX, colY + 0.06, colZ, { rough: 0.9 }, 20)); // resin bed
+  for (const y of [colY, colY + colH - 0.04]) g.add(cyl(K, 0.075, 0.075, 0.04, PAL.ink, colX, y, colZ, {}, 20));
+  const bandM = K.own(PAL.rust, { rough: 0.4, emissive: PAL.rust, ei: 0.1, transparent: true, opacity: 0.95 });
+  const band = mesh(new THREE.CylinderGeometry(0.057, 0.057, 0.07, 20), bandM, colX, 0, colZ, false); g.add(band);
+  const colCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(colX, colY + colH + 0.02, colZ), new THREE.Vector3(colX + 0.05, colY + colH + 0.15, colZ), new THREE.Vector3(CX + 0.3, colY + colH, colZ - 0.2), new THREE.Vector3(CX + 0.3, 0.62, colZ - 0.3)]);
+  g.add(mesh(new THREE.TubeGeometry(colCurve, 20, 0.008, 6), K.mat(PAL.rule, { rough: 0.3 }), 0, 0, 0, false));
+  const uv = led(K, CX + 0.35, 0.3, 0.29); g.add(uv);
+  let spin = 0;
+  return {
+    group: g, focus: new THREE.Vector3(-0.1, 0.75, 0.1), plateScale: 0.58,
+    dock: () => new THREE.Vector3(tray.position.x, tray.position.y + 0.06, tray.position.z),
+    animate(s) {
+      const ph = s.phase, p = s.p;
+      tray.position.z = -0.2 + (ph === 'run' ? (p < 0.55 ? ease(seg(p, 0, 0.2)) : 1 - ease(seg(p, 0.55, 0.8))) : 0) * 0.85;
+      const ferment = ph === 'incubate';
+      const grown = ferment ? p : (ph === 'run' || ph === 'read' || ph === 'analyse' || s.hasRead) ? 1 : 0;
+      spin += s.dt * (ferment ? 9 : 2.5); shaft.rotation.y = spin; rotor.rotation.z = -spin * (ferment ? 0.6 : 0.15);
+      broth.scale.y = (VH - 0.18) * (0.62 + 0.18 * grown);
+      brothM.color.setHex(0xe8d9a6).lerp(new THREE.Color(0xb88a3e), grown);
+      const top = VY + 0.01 + broth.scale.y;
+      bubbles.forEach((b) => {
+        const u = ((s.t * b.userData.sp * 0.35 + b.userData.o) % 1);
+        b.visible = ferment || grown > 0;
+        const ang = b.userData.a + u * 2 + spin * 0.05;
+        b.position.set(VX + Math.cos(ang) * b.userData.rad, VY + 0.05 + u * (top - VY - 0.08), VZ + Math.sin(ang) * b.userData.rad);
+      });
+      lcdM.emissiveIntensity = ferment ? 0.5 + 0.2 * Math.sin(s.t * 3) : 0.35;
+      setLed(l, ferment ? PAL.amber : PAL.sage, ferment ? 1 : 0.35);
+      // capture: the product band loads at the top of the column, then elutes down during read
+      const bandU = ph === 'read' ? p : ph === 'analyse' ? 1 : 0;
+      band.visible = ph === 'run' ? p > 0.35 : ph === 'read' || ph === 'analyse';
+      band.position.y = colY + 0.06 + colH * 0.74 - bandU * colH * 0.68;
+      bandM.opacity = ph === 'analyse' ? 0.3 : 0.95;
+      setLed(uv, ph === 'read' ? PAL.amber : PAL.sage, ph === 'read' || ph === 'run' ? 0.9 : 0.25);
+    }
+  };
+}
+
+const INSTRUMENTS = { vivarium: instVivarium, bioreactor: instBioreactor, plate: instPlateReader, biosensor: instBiosensor, lcms: instLCMS, flow: instFlow, culture: instCulture, sequencing: instSequencing, ephys: instEphys, thermal: instThermal, micro: instMicro };
 
 function makeTimerRing(K) {
   const g = new THREE.Group();
