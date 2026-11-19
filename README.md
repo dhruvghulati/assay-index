@@ -1,6 +1,6 @@
 # The Assay Index
 
-Searchable catalog of 162 drug-development assays across 12 categories and 48 providers, with a three.js 3D book hero. Live at https://assays.pplx.app
+Searchable catalog of 191 drug-development assays across 13 categories and 74 providers, with a three.js 3D book hero, a live 3D bench per assay (js/lab3d.js) and validation-evidence tiers A-D (js/validation.js). Live at https://assays.pplx.app
 
 Each assay records what it tests, relevant drug types, instruments, consumables, protocol steps, providers, and market/capacity notes.
 

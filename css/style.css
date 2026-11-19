@@ -308,3 +308,12 @@ footer.site {
   .grid { grid-template-columns: 1fr; }
   .topbar .meta { display: none; }
 }
+
+/* Mobile: stack table rows as cards so wide tables never overflow */
+@media (max-width: 640px) {
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack tr { border-bottom: 1px solid var(--rule); padding: var(--space-2) 0; }
+  table.stack td { border-bottom: 0; padding: var(--space-1) 0; overflow-wrap: anywhere; }
+}
+.bench-section #bench-mount { min-width: 0; }

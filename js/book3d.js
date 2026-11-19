@@ -4,6 +4,7 @@
 // Exported for Claude Code reuse: see claude-code-handoff/SPEC.md.
 
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { buildRig } from './lab3d.js';
 
 export function initBook3d(mount, assays, onOpenAssay) {
   const canvas = document.createElement('canvas');
@@ -93,7 +94,9 @@ export function initBook3d(mount, assays, onOpenAssay) {
   const book = new THREE.Group();
   scene.add(book);
 
-  const BW = 5.4, BH = 0.34, BD = 7.4; // half-width, thickness, depth of book block
+  const BW = 4.6, BD = 6.3;            // width of one board and depth of the book
+  const BT = 0.12, PB = 0.5;           // board thickness, full page-block height
+  const BH = BT;
   const cloth = new THREE.MeshStandardMaterial({ color: 0xc2a24e, roughness: 0.8 }); // mustard cloth
   const clothDark = new THREE.MeshStandardMaterial({ color: 0xa98a3e, roughness: 0.8 });
   const paper = new THREE.MeshStandardMaterial({ color: 0xfaf6ec, roughness: 0.95 });
@@ -114,8 +117,8 @@ export function initBook3d(mount, assays, onOpenAssay) {
     x.fillText('Index', 512, 520);
     x.font = '44px Georgia';
     x.fillStyle = 'rgba(124,95,34,0.85)';
-    x.fillText('Every assay, every machine, every step', 512, 620);
-    x.fillText(`${assays.length} chapters`, 512, 700);
+    x.fillText('Every assay, every machine, every step', 512, 650);
+    x.fillText(`${assays.length} chapters`, 512, 730);
     // small inlay illustration: two beakers
     x.strokeStyle = '#7c5f22'; x.lineWidth = 8;
     for (const bx of [430, 594]) {
@@ -130,53 +133,71 @@ export function initBook3d(mount, assays, onOpenAssay) {
     return t;
   }
 
-  // Front cover (hinged on left)
+  // Layout (book space, desk mat top at y = 0). Closed: back board, page block,
+  // front board, spine on the left at x = -BW/2. Opening rotates the front board
+  // (carrying the left half of the pages) 180 degrees about the spine hinge, and
+  // the hinge drops so the left half lies flat on the mat beside the right half.
+  const HX = -BW / 2;
+  const coverMat = new THREE.MeshStandardMaterial({ map: coverTexture(), roughness: 0.75 });
+
+  // Front cover (hinged at the spine). Title sits on its +y face.
   const frontCover = new THREE.Group();
-  frontCover.position.set(-BW, BH / 2, 0);
+  frontCover.position.set(HX, BT + PB, 0);
   const frontCoverMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(BW, BH, BD),
-    [clothDark, clothDark, clothDark, clothDark, new THREE.MeshStandardMaterial({ map: coverTexture(), roughness: 0.75 }), clothDark]
+    new THREE.BoxGeometry(BW, BT, BD),
+    [clothDark, clothDark, coverMat, cloth, clothDark, clothDark]
   );
-  frontCoverMesh.castShadow = true;
-  frontCoverMesh.position.x = BW / 2;
+  frontCoverMesh.castShadow = true; frontCoverMesh.receiveShadow = true;
+  frontCoverMesh.position.set(BW / 2, BT / 2, 0);
   frontCover.add(frontCoverMesh);
   book.add(frontCover);
 
   // Back cover
-  const backCover = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), clothDark);
-  backCover.position.set(0, -BH / 2 - 0.02, 0);
+  const backCover = new THREE.Mesh(new THREE.BoxGeometry(BW, BT, BD), clothDark);
+  backCover.position.set(0, BT / 2, 0);
   backCover.castShadow = true; backCover.receiveShadow = true;
   book.add(backCover);
 
-  // Spine
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.36, BH + 0.06, BD), clothDark);
-  spine.position.set(-BW - 0.16, -0.02, 0);
+  // Spine: a cloth strip at the hinge whose height follows the hinge
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1, BD), clothDark);
+  spine.position.set(HX - 0.07, 0.5, 0);
+  spine.castShadow = true;
   book.add(spine);
 
-  // Page block (right side when closed)
-  const pageBlock = new THREE.Mesh(new THREE.BoxGeometry(BW - 0.25, 0.5, BD - 0.5), paperSide);
-  pageBlock.position.set(0.05, 0.26, 0);
-  pageBlock.castShadow = true;
+  // Right page block; shrinks to half height when the book is open
+  const pageBlock = new THREE.Mesh(new THREE.BoxGeometry(BW - 0.18, PB, BD - 0.24), [paperSide, paperSide, paper, paperSide, paperSide, paperSide]);
+  pageBlock.position.set(0.05, BT + PB / 2, 0);
+  pageBlock.castShadow = true; pageBlock.receiveShadow = true;
   book.add(pageBlock);
 
-  // Left page (revealed when open): canvas texture with chapter content
-  const leftPageGroup = new THREE.Group();
+  // Left half of the pages rides on the inside of the front cover. Its -y face
+  // carries the chapter page and faces up once the cover has flipped over.
   const leftPageTex = { canvas: document.createElement('canvas') };
   leftPageTex.canvas.width = 1024; leftPageTex.canvas.height = 1400;
   leftPageTex.texture = new THREE.CanvasTexture(leftPageTex.canvas);
   leftPageTex.texture.colorSpace = THREE.SRGBColorSpace;
+  leftPageTex.texture.anisotropy = 4;
+  leftPageTex.texture.center.set(0.5, 0.5);
+  leftPageTex.texture.rotation = Math.PI; // face is turned 180 degrees after the flip
+  const leftPageMat = new THREE.MeshStandardMaterial({ map: leftPageTex.texture, roughness: 0.95 });
   const leftPageMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(BW - 0.3, 0.06, BD - 0.6),
-    [paperSide, paperSide, paperSide, paperSide, new THREE.MeshStandardMaterial({ map: leftPageTex.texture, roughness: 0.95 }), paperSide]
+    new THREE.BoxGeometry(BW - 0.18, PB / 2, BD - 0.24),
+    [paperSide, paperSide, paperSide, leftPageMat, paperSide, paperSide]
   );
-  leftPageMesh.position.set(BW / 2 - 0.05, 0.03, 0);
-  leftPageMesh.receiveShadow = true;
-  leftPageGroup.add(leftPageMesh);
-  leftPageGroup.position.set(-BW + 0.12, BH, 0);
-  book.add(leftPageGroup);
+  leftPageMesh.position.set(BW / 2 - 0.05, -PB / 4 - 0.002, 0);
+  leftPageMesh.castShadow = true; leftPageMesh.receiveShadow = true;
+  frontCover.add(leftPageMesh);
+  const leftPageGroup = frontCover; // kept for older references
 
   function drawChapter(assay, idx) {
     const x = leftPageTex.canvas.getContext('2d');
+    const MAXW = 840;
+    const fit = (str, w) => {            // ellipsize to the page width
+      if (x.measureText(str).width <= w) return str;
+      let t = str;
+      while (t.length > 1 && x.measureText(t + '\u2026').width > w) t = t.slice(0, -1);
+      return t.trimEnd() + '\u2026';
+    };
     x.fillStyle = '#faf6ec'; x.fillRect(0, 0, 1024, 1400);
     x.fillStyle = '#b03a2e';
     x.font = 'italic 60px Georgia'; x.textAlign = 'left';
@@ -193,84 +214,54 @@ export function initBook3d(mount, assays, onOpenAssay) {
     x.fillText(line, 90, y);
     y += 60;
     x.font = 'italic 44px Georgia'; x.fillStyle = '#6e6759';
-    for (const t of assay.tagline.match(/[^.]+\./g) || [assay.tagline]) {
-      y += 62; x.fillText(t.trim(), 90, y);
+    { // wrap the tagline, at most 3 lines
+      let ln = '', n = 0;
+      for (const w of assay.tagline.split(' ')) {
+        const test = ln ? ln + ' ' + w : w;
+        if (x.measureText(test).width > MAXW && ln) {
+          if (++n === 3) break;
+          y += 58; x.fillText(ln, 90, y); ln = w;
+        } else ln = test;
+      }
+      y += 58; x.fillText(fit(ln, MAXW), 90, y);
     }
     y += 90;
     x.fillStyle = '#43503f'; x.font = '700 40px Georgia';
     x.fillText('THE MACHINES', 90, y); y += 64;
     x.font = '38px Georgia'; x.fillStyle = '#2a2620';
     for (const inst of assay.instruments.slice(0, 4)) {
-      x.fillText(`• ${inst.name} — ${inst.vendor}`, 90, y); y += 56;
+      x.fillText(fit(`\u2022 ${inst.name} \u2014 ${inst.vendor}`, MAXW), 90, y); y += 56;
     }
     y += 40;
     x.fillStyle = '#43503f'; x.font = '700 40px Georgia';
     x.fillText('STEPS IN THIS CHAPTER', 90, y); y += 58;
     x.font = '36px Georgia'; x.fillStyle = '#6e6759';
     for (const s of assay.steps.slice(0, 4)) {
-      const short = s.length > 72 ? s.slice(0, 70) + '…' : s;
-      x.fillText(`${short}`, 110, y); y += 54;
+      x.fillText(fit(s, MAXW - 20), 110, y); y += 54;
     }
     x.fillStyle = '#a49b89'; x.font = 'italic 34px Georgia';
     x.fillText('Open the full chapter below ↓', 90, 1330);
     leftPageTex.texture.needsUpdate = true;
   }
 
-  // ---- Pop-up objects (rise from right page when open) ----
+  // ---- Chapter rig (rises from the right page when open) ----
+  // A small, chapter-specific bench rig from lab3d.js, rebuilt on setChapter.
   const popups = new THREE.Group();
+  popups.position.set(0.1, BT + PB / 2 + 0.002, 0.15);
+  popups.scale.setScalar(0.001);
   book.add(popups);
-
-  function makeBeaker() {
-    const g = new THREE.Group();
-    const glass = new THREE.MeshPhysicalMaterial({ color: 0xdfe8ea, transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0 });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.48, 1.5, 32), glass);
-    const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.43, 0.7, 32), new THREE.MeshStandardMaterial({ color: 0xd07a3a, roughness: 0.25 }));
-    liquid.position.y = -0.3;
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 12, 32), glass);
-    rim.rotation.x = Math.PI / 2; rim.position.y = 0.75;
-    body.castShadow = true;
-    g.add(body, liquid, rim);
-    return g;
+  let rig = null;
+  function buildChapterRig(i) {
+    if (rig) { popups.remove(rig.group); rig.dispose(); rig = null; }
+    try {
+      rig = buildRig(assays[i]);
+      rig.group.scale.setScalar(0.92);
+      rig.group.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+      rig.group.rotation.y = -0.12;
+      popups.add(rig.group);
+    } catch (e) { console.warn('Chapter rig failed', e); }
   }
-  function makePipette() {
-    const g = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 2.6, 24), new THREE.MeshStandardMaterial({ color: 0x3f4a5a, roughness: 0.4 }));
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.9, 24), new THREE.MeshStandardMaterial({ color: 0xc8c2b2, roughness: 0.6 }));
-    grip.position.y = 1.2;
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.8, 24), new THREE.MeshStandardMaterial({ color: 0xfaf6ec, roughness: 0.3 }));
-    tip.position.y = -1.7;
-    shaft.castShadow = true;
-    g.add(shaft, grip, tip);
-    return g;
-  }
-  function makePlate() {
-    const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.22, 1.6), new THREE.MeshStandardMaterial({ color: 0xf2ede0, roughness: 0.5 }));
-    base.castShadow = true; base.receiveShadow = true;
-    g.add(base);
-    const wellMat = new THREE.MeshStandardMaterial({ color: 0x9fb4a6, roughness: 0.3 });
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
-      const well = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 16), wellMat);
-      well.position.set(-0.95 + c * 0.475, 0.16, -0.45 + r * 0.45);
-      g.add(well);
-    }
-    return g;
-  }
-  function makeChip() {
-    const g = new THREE.Group();
-    const chip = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 1.1), new THREE.MeshStandardMaterial({ color: 0x2e3a4a, roughness: 0.35 }));
-    const gold = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.02, 0.7), new THREE.MeshStandardMaterial({ color: 0xc9a24e, roughness: 0.3, metalness: 0.6 }));
-    gold.position.y = 0.06;
-    chip.castShadow = true;
-    g.add(chip, gold);
-    return g;
-  }
-
-  const beaker = makeBeaker(); beaker.position.set(-1.15, 0.8, 1.5); beaker.scale.setScalar(0.001);
-  const pipette = makePipette(); pipette.position.set(0.1, 1.35, -0.6); pipette.rotation.z = -0.18; pipette.scale.setScalar(0.001);
-  const plate = makePlate(); plate.position.set(1.3, 0.35, 1.2); plate.scale.setScalar(0.001);
-  const chip = makeChip(); chip.position.set(0.9, 0.3, -1.7); chip.scale.setScalar(0.001);
-  popups.add(beaker, pipette, plate, chip);
+  buildChapterRig(0);
 
   // ---- State ----
   const state = {
@@ -290,7 +281,9 @@ export function initBook3d(mount, assays, onOpenAssay) {
   function setChapter(i) {
     state.chapter = (i + assays.length) % assays.length;
     drawChapter(assays[state.chapter], state.chapter);
-    state.popped.clear(); // re-rise pop-ups for the new chapter
+    buildChapterRig(state.chapter);
+    state.popped.clear(); // re-rise the rig for the new chapter
+    popups.scale.setScalar(0.001);
     updateDock();
   }
 
@@ -358,16 +351,18 @@ export function initBook3d(mount, assays, onOpenAssay) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
-  new ResizeObserver(resize).observe(mount);
+  const ro = new ResizeObserver(resize);
+  ro.observe(mount);
   resize();
 
-  const popTargets = [beaker, pipette, plate, chip];
   let running = true;
   const io = new IntersectionObserver(([en]) => { running = en.isIntersecting; }, { threshold: 0.05 });
   io.observe(mount);
 
+  let raf = 0, disposed = false;
   function frame() {
-    requestAnimationFrame(frame);
+    if (disposed) return;
+    raf = requestAnimationFrame(frame);
     if (!running) return;
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
@@ -376,28 +371,23 @@ export function initBook3d(mount, assays, onOpenAssay) {
     state.t += (state.target - state.t) * Math.min(1, dt * 2.4);
     const o = ease(Math.max(0, Math.min(1, state.t)));
 
-    // front cover rotates open around its left hinge
-    frontCover.rotation.z = -o * Math.PI * 0.94;
+    // front cover flips over the spine; hinge drops so both halves lie flat
+    frontCover.rotation.z = o * Math.PI;
+    frontCover.position.y = BT + PB - PB * o + Math.sin(o * Math.PI) * 0.35;
+    const hy = frontCover.position.y;
+    pageBlock.scale.y = 1 - 0.5 * o;
+    pageBlock.position.y = BT + (PB * pageBlock.scale.y) / 2;
+    spine.scale.y = hy + BT;
+    spine.position.y = (hy + BT) / 2;
+    // book slides right so the open spread is centred on the mat
+    book.position.x = o * BW / 2;
 
-    // left page settles up from the block as cover opens
-    leftPageGroup.position.y = BH + (1 - Math.abs(o - 0.7) / 0.7) * 0.001 + o * 0.30;
-    leftPageGroup.rotation.z = -Math.max(0, o - 0.75) * 0.12;
-    leftPageMesh.visible = o > 0.25;
-    pageBlock.visible = o < 0.98;
-
-    // pop-ups rise after open, staggered per chapter visit
-    if (state.target === 1) {
-      popTargets.forEach((p, i) => {
-        if (!state.popped.has(i) && o > 0.85) state.popped.add(i);
-        const want = state.popped.has(i) ? 1 : 0.001;
-        const s = p.scale.x + (want - p.scale.x) * Math.min(1, dt * (2.2 + i * 0.5));
-        p.scale.setScalar(Math.max(0.001, s));
-        p.rotation.y = Math.sin(t * 0.5 + i * 1.7) * 0.08;
-        p.position.y = p.userData.baseY ?? (p.userData.baseY = p.position.y);
-      });
-    } else {
-      popTargets.forEach((p) => { p.scale.x = Math.max(0.001, p.scale.x * (1 - dt * 4)); p.scale.y = p.scale.x; p.scale.z = p.scale.x; });
-    }
+    // chapter rig rises after open
+    const want = state.target === 1 && o > 0.85 ? 1 : 0.001;
+    const sc = popups.scale.x + (want - popups.scale.x) * Math.min(1, dt * 3);
+    popups.scale.setScalar(Math.max(0.001, sc));
+    popups.visible = sc > 0.01;
+    if (rig && popups.visible) rig.update(dt);
 
     // gentle idle float + pointer parallax
     const px = state.pointerX, py = state.pointerY;
@@ -407,8 +397,17 @@ export function initBook3d(mount, assays, onOpenAssay) {
     book.rotation.y = Math.sin(t * 0.25) * 0.04;
 
     renderer.render(scene, camera);
+    if (!mount.classList.contains('is-live')) mount.classList.add('is-live'); // hide CSS poster title
   }
   frame();
 
-  return { setOpen, setChapter, dispose: () => { renderer.dispose(); io.disconnect(); } };
+  function dispose() {
+    mount.classList.remove('is-live');
+    disposed = true;
+    cancelAnimationFrame(raf);
+    io.disconnect(); ro.disconnect();
+    if (rig) { rig.dispose(); rig = null; }
+    renderer.dispose();
+  }
+  return { setOpen, setChapter, dispose };
 }
