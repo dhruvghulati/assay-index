@@ -48,7 +48,8 @@
     peptide: ["hit-finding", "lead-opt", "cmc"],
     "disease-models": ["hit-to-lead", "lead-opt"],
     invivo: ["lead-opt", "ind-enabling"],
-    production: ["cmc"]
+    production: ["cmc"],
+    pathology: ["lead-opt", "ind-enabling", "clinical"]
   };
 
   var BY_ID = {
@@ -75,6 +76,9 @@
     "telemetry-cv": ["ind-enabling"],
     "nhp-pk": ["lead-opt", "ind-enabling"],
     "gmp-tech-transfer": ["cmc", "clinical"],
+    "viral-safety-cgt": ["ind-enabling", "cmc"],
+    "glp-histopath": ["ind-enabling"],
+    "ihc-ish": ["lead-opt", "clinical"],
     "cell-line-development": ["cmc"],
     "spps-peptide": ["hit-finding", "lead-opt", "cmc"],
     "oligo-manufacturing": ["hit-finding", "lead-opt", "cmc"]

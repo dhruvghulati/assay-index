@@ -4,7 +4,7 @@
 // Exported for Claude Code reuse: see claude-code-handoff/SPEC.md.
 
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { buildRig } from './lab3d.js?v=20261119b';
+import { buildRig } from './lab3d.js?v=20261122';
 
 export function initBook3d(mount, assays, onOpenAssay) {
   const canvas = document.createElement('canvas');

@@ -18,10 +18,11 @@
     peptide: "Peptide analytics",
     "disease-models": "Complex disease models",
     invivo: "In vivo pharmacology & tox",
-    production: "Production & scale-up"
+    production: "Production & scale-up",
+    pathology: "Tissue & pathology"
   };
 
-  const V = '?v=20261119b';
+  const V = '?v=20261122';
   // Optional layers from other files; guard for missing ones.
   if (typeof window.applyStages === 'function') { try { window.applyStages(ASSAYS); } catch (e) { console.warn('applyStages failed', e); } }
   if (typeof window.applyValidation === 'function' && ASSAYS.some((a) => !a.validation)) { try { window.applyValidation(ASSAYS); } catch (e) { console.warn('applyValidation failed', e); } }

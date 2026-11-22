@@ -66,7 +66,7 @@ img, svg, canvas { display: block; max-width: 100%; height: auto; }
 input, button, select { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: none; }
 
-h1, h2, h3, h4 { text-wrap: balance; line-height: 1.15; font-family: var(--font-display); font-weight: 500; }
+h1, h2, h3, h4 { text-wrap: balance; line-height: 1.15; font-family: var(--font-body); font-weight: 600; letter-spacing: -0.01em; }
 p, li, figcaption { text-wrap: pretty; max-width: 72ch; }
 
 ::selection { background: rgba(92, 111, 90, 0.25); }

@@ -243,7 +243,8 @@
     cgt: rule('C', 'cgtQ2', ['q2', 'cgt']),
     'disease-models': rule('D', 'emerging', []),
     invivo: rule('C', 'invivoC', ['m3']),
-    production: rule('C', 'prodResearch', ['q11'])
+    production: rule('C', 'prodResearch', ['q11']),
+    pathology: rule('C', 'pathC', ['m3'])
   };
 
   // Production & scale-up (data-12): a manufacturing service, tiered by the framework that governs it.
